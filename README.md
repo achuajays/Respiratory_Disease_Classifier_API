@@ -1,48 +1,54 @@
-# 🫁 Respiratory Disease Classifier API
+# 🏥 Medical AI Platform API
 
-> **91% F1-Score** • Random Forest • FastAPI • CPU-only • Docker-ready
+> **Respiratory Classifier** • **Heart Disease Analysis** • **Medical Imaging** • **Lab Reports** • **Symptom Checker** • **Drug Interactions**
 
-A production-ready REST API that classifies respiratory conditions from breath/cough WAV audio files using a pre-trained **Random Forest** model trained on the [ICBHI Respiratory Sound Database](https://www.kaggle.com/datasets/vbookshelf/respiratory-sound-database).
+A comprehensive medical AI REST API combining a pre-trained **Random Forest** classifier for respiratory diseases with **Groq LLM (Llama 4 Scout)** powered endpoints for cardiac analysis, medical image interpretation, lab report reading, conversational symptom checking, and drug interaction analysis.
 
 ---
 
 ## Table of Contents
 
-- [How the Model Was Built](#-how-the-model-was-built)
-- [Preprocessing Pipeline](#-preprocessing-pipeline)
-- [API Usage](#-api-usage)
+- [Features at a Glance](#-features-at-a-glance)
+- [How the ML Model Was Built](#-how-the-ml-model-was-built)
+- [API Endpoints](#-api-endpoints)
 - [Project Structure](#-project-structure)
 - [Quickstart](#-quickstart)
 - [Docker](#-docker)
-- [Architecture Diagrams](#-architecture-diagrams)
+- [Architecture](#-architecture)
+- [Environment Variables](#-environment-variables)
 
 ---
 
-## 🧠 How the Model Was Built
+## ✨ Features at a Glance
+
+| Domain | Endpoint | Input | AI Method |
+|---|---|---|---|
+| 🫁 Respiratory Prediction | `POST /predict` | 🎤 WAV audio | Random Forest ML |
+| 📋 Patient Report | `POST /report` | 📝 JSON | Groq LLM |
+| 🫀 Heart Disease | `POST /heart/analyze` | 📊 Clinical data | 3-step LLM chain |
+| 🔬 Medical Imaging | `POST /scan/analyze` | 🖼️ Image | Vision LLM |
+| 🧪 Lab Reports | `POST /lab/analyze` | 🖼️ Image | 2-step Vision LLM |
+| 💬 Symptom Checker | `POST /symptoms/chat` | 💬 Chat | Conversational LLM |
+| 💊 Drug Interactions | `POST /drugs/check` | 📝 JSON | 2-step LLM chain |
+| ❤️ Health Check | `GET /` | — | — |
+| 📋 Classes | `GET /classes` | — | — |
+
+---
+
+## 🧠 How the ML Model Was Built
 
 ### Dataset
-- **Source:** ICBHI Respiratory Sound Database (Kaggle)
+- **Source:** [ICBHI Respiratory Sound Database](https://www.kaggle.com/datasets/vbookshelf/respiratory-sound-database) (Kaggle)
 - **Content:** 920 annotated WAV recordings from 126 patients
-- **Labels:** 8 respiratory conditions
-
-| Label | Condition |
-|---|---|
-| Healthy | No respiratory disease |
-| COPD | Chronic Obstructive Pulmonary Disease |
-| URTI | Upper Respiratory Tract Infection |
-| LRTI | Lower Respiratory Tract Infection |
-| Asthma | Asthma |
-| Bronchiectasis | Bronchiectasis |
-| Bronchiolitis | Bronchiolitis |
-| Pneumonia | Pneumonia |
+- **Labels:** 8 respiratory conditions: Asthma, Bronchiectasis, Bronchiolitis, COPD, Healthy, LRTI, Pneumonia, URTI
 
 ### Feature Engineering
 
-Each audio file was trimmed to a **fixed duration** (7.856 seconds — the length of the shortest clip) and run through 8 librosa feature extractors. The **mean, std, max, and min** of each feature were used as the final flat vector:
+Each audio file trimmed to **7.856s** → 8 librosa features extracted → mean/std/max/min statistics → 30-column feature vector.
 
 | Feature | Description |
 |---|---|
-| `chroma_stft` | Chromagram — 12 pitch class energy |
+| `chroma_stft` | 12 pitch class energy |
 | `mfcc` (n=13) | Mel-frequency cepstral coefficients |
 | `mel_spectrogram` | Energy in mel-frequency bands |
 | `spectral_contrast` | Valley-to-peak ratio per sub-band |
@@ -51,115 +57,195 @@ Each audio file was trimmed to a **fixed duration** (7.856 seconds — the lengt
 | `spectral_rolloff` | Frequency below which 85% energy lies |
 | `zero_crossing_rate` | Rate of sign changes in the signal |
 
-Two features (`mel_spectrogram_min`, `chroma_stft_max`) were dropped after Random Forest feature importance analysis.
-
-### Model Training
+### Model
 
 ```
 RandomForestClassifier
-  ├── Hyperparameter tuning: Optuna (30 Bayesian trials)
-  ├── Cross-validation: StratifiedKFold (5 folds)
+  ├── Tuning: Optuna (30 Bayesian trials)
+  ├── Validation: StratifiedKFold (5 folds)
   ├── Class imbalance: balanced class_weight
   └── Result: 91% weighted F1-score
 ```
 
 ---
 
-## 🔧 Preprocessing Pipeline
+## 🌐 API Endpoints
 
-```mermaid
-flowchart TD
-    A[WAV File Path] --> B[AudioLoader\nlibrosa.load - mono=True]
-    B --> C[AudioTrimmer\nFixed 7.856s - zero-pad if shorter]
-    C --> D[FeatureExtractor\n8 librosa features]
-    D --> E[FeatureStatisticsCalculator\nmean · std · max · min per feature]
-    E --> F[Drop excluded columns\nmel_spectrogram_min\nchroma_stft_max]
-    F --> G[Numeric DataFrame\n30 columns]
-    G --> H[RandomForestClassifier.predict]
-    H --> I[Prediction + Probabilities]
-```
+### `POST /predict` — Respiratory Audio Classification
 
----
-
-## 🌐 API Usage
-
-### Endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/` | Health check |
-| `GET` | `/classes` | List all 8 condition labels |
-| `POST` | `/predict` | Upload WAV → prediction + confidence |
-
-### `/predict` — Request
+Upload a WAV breath/cough recording → ML model returns prediction + confidence.
 
 ```bash
-curl -X POST "http://localhost:8000/predict" \
-     -F "file=@your_audio.wav"
+curl -X POST "http://localhost:8000/predict" -F "file=@cough.wav"
 ```
-
-### `/predict` — Response
 
 ```json
 {
   "prediction": "COPD",
   "confidence": 0.87,
-  "all_probabilities": {
-    "Asthma": 0.02,
-    "Bronchiectasis": 0.01,
-    "Bronchiolitis": 0.01,
-    "COPD": 0.87,
-    "Healthy": 0.05,
-    "LRTI": 0.01,
-    "Pneumonia": 0.02,
-    "URTI": 0.01
-  }
+  "all_probabilities": { "Asthma": 0.02, "COPD": 0.87, "Healthy": 0.05, ... }
 }
 ```
+
+---
+
+### `POST /report` — AI Patient Report
+
+Generate a comprehensive Markdown report for a diagnosed respiratory condition.
+
+```bash
+curl -X POST "http://localhost:8000/report" \
+     -H "Content-Type: application/json" \
+     -d '{"disease": "COPD", "age": 65, "height": 170, "weight": 82}'
+```
+
+---
+
+### `POST /heart/analyze` — Heart Disease Risk Analysis
+
+**3-step LLM chain:** Triage → Diagnosis → Report. All 11 clinical fields required.
+
+```bash
+curl -X POST "http://localhost:8000/heart/analyze" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "age": 55, "sex": "M", "chest_pain_type": "ASY",
+       "resting_bp": 140, "cholesterol": 260, "fasting_bs": 1,
+       "resting_ecg": "ST", "max_hr": 130, "exercise_angina": "Y",
+       "oldpeak": 2.0, "st_slope": "Flat"
+     }'
+```
+
+**Response:** `triage` (urgency + red flags) → `diagnosis` (conditions + risk score) → `report` (full Markdown)
+
+---
+
+### `POST /scan/analyze` — Medical Image Analysis
+
+Upload a chest X-ray, ECG, CT scan, or MRI → Vision model returns findings + radiology report.
+
+```bash
+curl -X POST "http://localhost:8000/scan/analyze" \
+     -F "file=@chest_xray.jpg" \
+     -F "scan_type=chest_xray"
+```
+
+**Scan types:** `chest_xray` | `ecg` | `ct_scan` | `mri`
+
+---
+
+### `POST /lab/analyze` — Lab Report Analyzer
+
+Upload a photo of a blood test → Vision model OCRs values → interprets with normal ranges.
+
+```bash
+curl -X POST "http://localhost:8000/lab/analyze" \
+     -F "file=@blood_test.jpg" \
+     -F "report_type=cbc"
+```
+
+**Report types:** `blood_test` | `cbc` | `lipid_panel` | `liver_function` | `kidney_function` | `thyroid_panel` | `metabolic_panel` | `urine_test` | `general`
+
+---
+
+### `POST /symptoms/chat` — Symptom Checker Chatbot
+
+Stateless conversational AI — send full chat history, get structured response.
+
+```bash
+curl -X POST "http://localhost:8000/symptoms/chat" \
+     -H "Content-Type: application/json" \
+     -d '{"messages": [{"role": "user", "content": "I have a persistent cough and chest tightness"}]}'
+```
+
+**Response includes:** `reply`, `follow_up_questions`, `suspected_conditions`, `urgency`, `should_continue`
+
+---
+
+### `POST /drugs/check` — Drug Interaction Checker
+
+Check medications for interactions, contraindications, and safety warnings.
+
+```bash
+curl -X POST "http://localhost:8000/drugs/check" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "medications": ["Metformin", "Lisinopril", "Aspirin"],
+       "condition": "COPD",
+       "age": 65,
+       "allergies": ["Penicillin"]
+     }'
+```
+
+**Response includes:** pairwise `interactions` (with severity), `warnings`, `safe_summary`, full `report`
 
 ---
 
 ## 📁 Project Structure
 
 ```
-Respiratory_Disease_Classifier_API/
-├── main.py                            # FastAPI application (startup, routes)
-├── model_utils.py                     # Preprocessing pipeline classes
-├── respiratory_classifier.pkl         # Trained Random Forest model (joblib)
-├── respiratory_disease_rf_cv_91_f1_score.py  # Original training script
-├── Dockerfile                         # Container definition
-├── .dockerignore                      # Docker build exclusions
-├── pyproject.toml                     # Project metadata & dependencies
-└── README.md                          # This file
+Medical_AI_Platform/
+├── main.py                         # FastAPI entrypoint (middleware, routers)
+├── model_utils.py                  # Audio preprocessing pipeline classes
+├── respiratory_classifier.pkl      # Trained Random Forest model
+├── .env                            # GROQ_API_KEY (not committed)
+├── Dockerfile                      # Production container
+├── pyproject.toml                  # Dependencies
+│
+├── app/
+│   ├── config.py                   # Pydantic BaseSettings
+│   ├── schemas.py                  # All Pydantic models & enums
+│   ├── cache.py                    # Prediction cache (LRU)
+│   ├── dependencies.py             # Lifespan manager (model + Groq client)
+│   │
+│   └── routers/
+│       ├── health.py               # GET / and /classes
+│       ├── predict.py              # POST /predict (audio → ML)
+│       ├── report.py               # POST /report (LLM report)
+│       ├── heart.py                # POST /heart/analyze (3-step chain)
+│       ├── scan.py                 # POST /scan/analyze (vision)
+│       ├── lab.py                  # POST /lab/analyze (vision OCR)
+│       ├── symptoms.py             # POST /symptoms/chat (conversational)
+│       └── drugs.py                # POST /drugs/check (interaction check)
+│
+└── .vscode/
+    └── launch.json                 # F5 debug config
 ```
 
 ---
 
 ## ⚡ Quickstart
 
-### 1. Setup environment
+### 1. Install dependencies
 
 ```bash
 # Using uv (recommended)
 uv sync
 
-# OR using pip
-pip install fastapi "uvicorn[standard]" librosa numpy pandas scikit-learn joblib python-multipart
+# OR pip
+pip install -r requirements.txt
 ```
 
-### 2. Run the server
+### 2. Set your Groq API key
 
 ```bash
-uvicorn main:app --host 0.0.0.0 --port 8000
+# Create .env in project root
+echo "GROQ_API_KEY=your-key-here" > .env
 ```
 
-### 3. Open interactive docs
+Get a free key at [console.groq.com](https://console.groq.com/keys).
+
+### 3. Run the server
+
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 4. Open docs
 
 ```
 http://localhost:8000/docs
 ```
-
-Upload any `.wav` breath/cough recording and inspect results in the Swagger UI.
 
 ---
 
@@ -167,97 +253,108 @@ Upload any `.wav` breath/cough recording and inspect results in the Swagger UI.
 
 ```bash
 # Build
-docker build -t respiratory-api .
+docker build -t medical-ai-api .
 
-# Run
-docker run -p 8000:8000 respiratory-api
+# Run (pass API key at runtime — never bake into image)
+docker run -p 8000:8000 -e GROQ_API_KEY=your-key-here medical-ai-api
 ```
 
 ---
 
-## 🗺️ Architecture Diagrams
+## 🗺️ Architecture
 
-### Training Pipeline
-
-```mermaid
-flowchart LR
-    A[ICBHI Dataset\n920 WAV files] --> B[Load Audio\nlibrosa]
-    B --> C[Trim to Fixed Duration\n7.856 seconds]
-    C --> D[Extract 8 Features\nper file]
-    D --> E[Compute Statistics\nmean·std·max·min]
-    E --> F[Feature Selection\nDrop 2 low-importance cols]
-    F --> G[Optuna Hyperparameter\nSearch - 30 trials]
-    G --> H[StratifiedKFold\n5-fold CV]
-    H --> I[RandomForestClassifier\n91% F1-Score]
-    I --> J[joblib.dump\nrespiratory_classifier.pkl]
-```
-
-### Inference Flow
-
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant A as FastAPI /predict
-    participant P as Preprocessing Pipeline
-    participant M as RandomForest Model
-
-    C->>A: POST /predict (WAV file)
-    A->>A: Save to temp file
-    A->>P: pipeline.transform([temp_path])
-    P->>P: AudioLoader → load WAV
-    P->>P: AudioTrimmer → pad/trim to 7.856s
-    P->>P: FeatureExtractor → 8 features
-    P->>P: FeatureStatisticsCalculator → DataFrame
-    P->>A: features_df (1 row × 30 cols)
-    A->>M: model.predict(features_df)
-    M->>A: prediction + probabilities
-    A->>A: Delete temp file
-    A->>C: JSON { prediction, confidence, all_probabilities }
-```
-
-### System Components
+### System Overview
 
 ```mermaid
 graph TB
     subgraph Client
-        W[Swagger UI / curl / App]
+        W[Swagger UI / curl / Frontend App]
     end
 
-    subgraph FastAPI Server
-        R[/predict endpoint/]
-        L[Startup: load model + fit pipeline]
-        T[Temp file handler]
+    subgraph "FastAPI Server"
+        direction TB
+        MW[CORS Middleware]
+
+        subgraph "ML Pipeline"
+            PR[/predict/]
+            PKL[(RandomForest Model)]
+            PIPE[Audio Preprocessing]
+        end
+
+        subgraph "Groq LLM Endpoints"
+            RP[/report/]
+            HT["/heart/analyze<br/>(3-step chain)"]
+            SC["/scan/analyze<br/>(vision)"]
+            LB["/lab/analyze<br/>(vision OCR)"]
+            SY["/symptoms/chat<br/>(conversational)"]
+            DR["/drugs/check<br/>(2-step chain)"]
+        end
     end
 
-    subgraph model_utils.py
-        AL[AudioLoader]
-        AT[AudioTrimmer\n7.856s fixed]
-        FE[FeatureExtractor\n8 librosa features]
-        FS[FeatureStatisticsCalculator\n4 stats × 8 features = 30 cols]
+    subgraph External
+        GROQ[Groq API<br/>Llama 4 Scout]
     end
 
-    subgraph Artifacts
-        PKL[(respiratory_classifier.pkl\nRandomForest)]
-    end
+    W --> MW
+    MW --> PR
+    MW --> RP & HT & SC & LB & SY & DR
+    PR --> PIPE --> PKL
+    RP & HT & SC & LB & SY & DR --> GROQ
+```
 
-    W -->|POST WAV| R
-    R --> T
-    T --> AL
-    AL --> AT
-    AT --> FE
-    FE --> FS
-    FS -->|DataFrame| R
-    PKL -->|joblib.load on startup| L
-    L --> R
-    R -->|JSON| W
+### Heart Disease Analysis Chain
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant API as /heart/analyze
+    participant G as Groq LLM
+
+    C->>API: POST clinical data (11 fields)
+    API->>G: Step 1: Triage prompt + patient data
+    G-->>API: JSON {urgency, red_flags}
+    API->>G: Step 2: Diagnosis prompt + data + triage
+    G-->>API: JSON {condition, risk_score, differentials}
+    API->>G: Step 3: Report prompt + data + triage + diagnosis
+    G-->>API: Full Markdown report
+    API-->>C: {triage, diagnosis, report, tokens_used}
+```
+
+### Preprocessing Pipeline (Respiratory)
+
+```mermaid
+flowchart LR
+    A[WAV File] --> B[AudioLoader<br/>librosa.load]
+    B --> C[AudioTrimmer<br/>7.856s fixed]
+    C --> D[FeatureExtractor<br/>8 librosa features]
+    D --> E[Statistics<br/>mean·std·max·min]
+    E --> F[30-col DataFrame]
+    F --> G[RandomForest<br/>Prediction]
 ```
 
 ---
 
-## 💡 Why CPU-Only Works Perfectly
+## 🔑 Environment Variables
 
-- Random Forest is **CPU-native** — no GPU dependency
-- No PyTorch, no CUDA, no tensor operations
-- Librosa feature extraction is lightweight (< 1s per file)
-- Model loads in ~2 seconds on any modern CPU
-- Horizontal scaling: just run more containers
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `GROQ_API_KEY` | Yes (for LLM endpoints) | — | API key from [console.groq.com](https://console.groq.com) |
+| `GROQ_MODEL` | No | `meta-llama/llama-4-scout-17b-16e-instruct` | Groq model to use |
+| `MODEL_PATH` | No | `respiratory_classifier.pkl` | Path to the trained RF model |
+| `CACHE_MAX_SIZE` | No | `128` | Max cached predictions |
+
+---
+
+## ⚠️ Disclaimer
+
+This API is for **educational and demonstration purposes only**. AI-generated medical analysis is not a substitute for professional medical advice, diagnosis, or treatment. Always consult qualified healthcare providers.
+
+---
+
+## 💡 Why This Stack?
+
+- **Random Forest** is CPU-native — no GPU needed, inference in milliseconds
+- **Groq** provides the fastest LLM inference available (~300 tokens/sec)
+- **Llama 4 Scout** supports both text and vision in one model
+- **FastAPI** gives automatic OpenAPI docs, type validation, and async support
+- **Modular routers** make each feature independently testable and deployable
