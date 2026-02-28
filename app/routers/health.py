@@ -9,10 +9,10 @@ from fastapi import APIRouter, Request
 router = APIRouter(tags=["Health"])
 
 
-@router.get("/", summary="Health check")
+@router.get("/health", summary="Health check")
 def health_check():
     """Simple health-check endpoint."""
-    return {"status": "ok", "message": "Respiratory Classifier API is running 🫁"}
+    return {"status": "ok", "message": "Medical AI Platform is running 🏥"}
 
 
 @router.get("/classes", summary="List model classes")
