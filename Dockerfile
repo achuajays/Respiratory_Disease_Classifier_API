@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir \
     pydantic-settings
 
 # Copy source and model
-COPY main.py model_utils.py respiratory_classifier.pkl .env ./
+COPY main.py model_utils.py respiratory_classifier.pkl  ./
 COPY app/ ./app/
 
 EXPOSE 8000
