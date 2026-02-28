@@ -21,9 +21,10 @@ RUN pip install --no-cache-dir \
     groq \
     pydantic-settings
 
-# Copy source and model
+# Copy source, model, and dashboard
 COPY main.py model_utils.py respiratory_classifier.pkl  ./
 COPY app/ ./app/
+COPY static/ ./static/
 
 EXPOSE 8000
 
