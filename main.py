@@ -55,8 +55,11 @@ async def metrics_middleware(request: Request, call_next):
     duration_ms = (time.perf_counter() - start) * 1000
 
     path = request.url.path
-    # Skip tracking for static files and docs
-    if not path.startswith("/static"):
+    # Skip dashboard, admin, static, and docs — only track real API calls
+    skip = path.startswith("/static") or path.startswith("/admin") or path in (
+        "/", "/docs", "/redoc", "/openapi.json", "/favicon.ico",
+    )
+    if not skip:
         _metrics.record_request(path, duration_ms, response.status_code)
 
     return response
