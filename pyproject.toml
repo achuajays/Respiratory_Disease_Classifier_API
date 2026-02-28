@@ -13,6 +13,8 @@ dependencies = [
     "scikit-learn>=1.4.0",
     "joblib>=1.3.0",
     "python-multipart>=0.0.9",
+    "groq>=0.12.0",
+    "python-dotenv>=1.0.0",
 ]
 
 [tool.uv]
