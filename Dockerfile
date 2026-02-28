@@ -17,10 +17,13 @@ RUN pip install --no-cache-dir \
     pandas \
     scikit-learn \
     joblib \
-    python-multipart
+    python-multipart \
+    groq \
+    pydantic-settings
 
 # Copy source and model
-COPY main.py model_utils.py respiratory_classifier.pkl ./
+COPY main.py model_utils.py respiratory_classifier.pkl .env ./
+COPY app/ ./app/
 
 EXPOSE 8000
 
