@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.dependencies import lifespan
-from app.routers import health, predict, report
+from app.routers import drugs, health, heart, lab, predict, report, scan, symptoms
 
 # ---------------------------------------------------------------------------
 # App
@@ -25,9 +25,10 @@ app = FastAPI(
     description=(
         "Upload a breath/cough WAV audio file and receive a respiratory "
         "condition prediction from a pre-trained Random Forest model. "
-        "Generate AI-powered patient reports via Groq LLM."
+        "Generate AI-powered patient reports via Groq LLM. "
+        "Assess heart disease risk with multi-step AI analysis."
     ),
-    version="2.0.0",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
@@ -50,3 +51,8 @@ app.add_middleware(
 app.include_router(health.router)
 app.include_router(predict.router)
 app.include_router(report.router)
+app.include_router(heart.router)
+app.include_router(scan.router)
+app.include_router(symptoms.router)
+app.include_router(drugs.router)
+app.include_router(lab.router)
