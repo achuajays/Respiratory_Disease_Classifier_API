@@ -11,11 +11,14 @@ Docs:
     http://localhost:8000/docs
 """
 
+import hashlib
 import os
 import tempfile
+from functools import lru_cache
 
 import joblib
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from model_utils import create_respiratory_pipeline
@@ -34,11 +37,28 @@ app = FastAPI(
 )
 
 # ---------------------------------------------------------------------------
+# CORS  (allow all origins — tighten for production)
+# ---------------------------------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ---------------------------------------------------------------------------
 # Globals  (populated on startup)
 # ---------------------------------------------------------------------------
 
 model = None
 preprocessing_pipeline = None
+
+# In-memory prediction cache (keyed by SHA-256 of file content)
+# Maxsize=128 keeps memory bounded; same file won't re-run the pipeline.
+PREDICTION_CACHE: dict[str, dict] = {}
+CACHE_MAX_SIZE = 128
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "respiratory_classifier.pkl")
 
@@ -116,10 +136,19 @@ async def predict(file: UploadFile = File(..., description="WAV audio file to cl
     # ------------------------------------------------------------------
     temp_path: str | None = None
     try:
+        content = await file.read()
+
+        # -----------------------------------------------------------------
+        # Cache check  (hash the raw bytes → skip pipeline if seen before)
+        # -----------------------------------------------------------------
+        file_hash = hashlib.sha256(content).hexdigest()
+
+        if file_hash in PREDICTION_CACHE:
+            return JSONResponse(content=PREDICTION_CACHE[file_hash])
+
         with tempfile.NamedTemporaryFile(
             delete=False, suffix=".wav", prefix="resp_"
         ) as tmp:
-            content = await file.read()
             tmp.write(content)
             temp_path = tmp.name
 
@@ -139,13 +168,19 @@ async def predict(file: UploadFile = File(..., description="WAV audio file to cl
             for cls, prob in zip(model.classes_, probabilities)
         }
 
-        return JSONResponse(
-            content={
-                "prediction": str(prediction),
-                "confidence": round(confidence, 6),
-                "all_probabilities": all_probs,
-            }
-        )
+        result = {
+            "prediction": str(prediction),
+            "confidence": round(confidence, 6),
+            "all_probabilities": all_probs,
+        }
+
+        # Store in cache (evict oldest if full)
+        if len(PREDICTION_CACHE) >= CACHE_MAX_SIZE:
+            oldest_key = next(iter(PREDICTION_CACHE))
+            del PREDICTION_CACHE[oldest_key]
+        PREDICTION_CACHE[file_hash] = result
+
+        return JSONResponse(content=result)
 
     except HTTPException:
         raise
